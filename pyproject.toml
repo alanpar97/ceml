@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ceml"
+version = "0.7"
+description = "Counterfactuals for explaining machine learning models - CELIA compatible"
+readme = "README.rst"
+license = { text = "MIT" }
+authors = [{ name = "André Artelt", email = "aartelt@techfak.uni-bielefeld.de" },
+{ name = "Alan Paredes", email = "alan.paredes@uni.lu"}]
+keywords = ["machine learning", "counterfactual"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.12"
+dependencies = [
+    "scikit-learn>=1.3.2",
+    "torch>=2.8.0",
+    "cvxpy>=1.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "sphinx==4.0.2",
+    "sphinx-rtd-theme==1.3.0",
+    "pytest==7.4.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/andreArtelt/ceml"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ceml*"]
+
+[tool.ruff]
+extend = "ruff.toml"

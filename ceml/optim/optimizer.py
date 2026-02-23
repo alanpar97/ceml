@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
+
 import numpy as np
 from scipy.optimize import minimize
-from ..costfunctions import CostFunctionDifferentiable
 
 
 class Optimizer(ABC):
@@ -15,17 +15,18 @@ class Optimizer(ABC):
     ----
     Any class derived from :class:`Optimizer` has to implement the abstract methods `init`, `__call__` and `is_grad_based`.
     """
+
     def __init__(self, **kwds):
         super().__init__(**kwds)
-    
+
     @abstractmethod
-    def init(self, ):
+    def init(self):
         raise NotImplementedError()
 
     @abstractmethod
     def __call__(self):
         raise NotImplementedError()
-    
+
     @abstractmethod
     def is_grad_based(self):
         raise NotImplementedError()
@@ -46,12 +47,12 @@ def is_optimizer_grad_based(optim):
     ----------
     optim : `str` or instance of :class:`ceml.optim.optimizer.Optimizer`
         Description of the optimization algorithm or an instance of :class:`ceml.optim.optimizer.Optimizer`.
-    
+
     Returns
     -------
     `bool`
         True if the optimization algorithm needs a gradient, False otherwise.
-    
+
     Raises
     ------
     ValueError
@@ -60,20 +61,18 @@ def is_optimizer_grad_based(optim):
         If `optim` is neither a string nor an instance of :class:`ceml.optim.optimizer.Optimizer`.
     """
     if isinstance(optim, str):
-        if optim == "nelder-mead":
+        if optim == "nelder-mead" or optim == "powell":
             return False
-        elif optim == "powell":
-            return False
-        elif optim == "bfgs":
+        if optim == "bfgs" or optim == "cg":
             return True
-        elif optim == "cg":
-            return True
-        else:
-            raise ValueError(f"Invalid value of 'optim'.\n'optim' has to be 'nelder-mead', 'powell', 'cg' or 'bfgs' but not '{optim}'")
-    elif isinstance(optim, Optimizer):
+        raise ValueError(
+            f"Invalid value of 'optim'.\n'optim' has to be 'nelder-mead', 'powell', 'cg' or 'bfgs' but not '{optim}'"
+        )
+    if isinstance(optim, Optimizer):
         return optim.is_grad_based()
-    else:
-        raise TypeError(f"optim has to be either a string or an instance of 'ceml.optim.optimizer.Optimizer' but not of {type(optim)}")
+    raise TypeError(
+        f"optim has to be either a string or an instance of 'ceml.optim.optimizer.Optimizer' but not of {type(optim)}"
+    )
 
 
 def prepare_optim(optim, f, x0, f_grad=None, optimizer_args=None):
@@ -109,7 +108,7 @@ def prepare_optim(optim, f, x0, f_grad=None, optimizer_args=None):
     -------
     `callable`
         An instance of :class:`ceml.optim.optimizer.Optimizer`
-    
+
     Raises
     ------
     ValueError
@@ -118,7 +117,9 @@ def prepare_optim(optim, f, x0, f_grad=None, optimizer_args=None):
         If `optim` is neither a string nor an instance of :class:`ceml.optim.optimizer.Optimizer`.
     """
     if is_optimizer_grad_based(optim) and f_grad is None:
-        raise ValueError("You have to specify the gradient of the cost function if you want to use a gradient-based optimization algorithm.")
+        raise ValueError(
+            "You have to specify the gradient of the cost function if you want to use a gradient-based optimization algorithm."
+        )
 
     tol = None
     max_iter = None
@@ -133,29 +134,31 @@ def prepare_optim(optim, f, x0, f_grad=None, optimizer_args=None):
             optim = NelderMead()
             optim.init(f=f, x0=x0, tol=tol, max_iter=max_iter)
             return optim
-        elif optim == "powell":
+        if optim == "powell":
             optim = Powell()
             optim.init(f=f, x0=x0, tol=tol, max_iter=max_iter)
             return optim
-        elif optim == "bfgs":
+        if optim == "bfgs":
             optim = BFGS()
             optim.init(f=f, f_grad=f_grad, x0=x0, tol=tol, max_iter=max_iter)
             return optim
-        elif optim == "cg":
+        if optim == "cg":
             optim = ConjugateGradients()
             optim.init(f=f, f_grad=f_grad, x0=x0, tol=tol, max_iter=max_iter)
             return optim
-        else:
-            raise ValueError(f"Invalid value of 'optim'.\n'optim' has to be 'nelder-mead', 'powell', 'cg' or 'bfgs' but not '{optim}'")
-    elif isinstance(optim, Optimizer):
-        args = {'f': f, 'x0': x0, 'tol': tol, 'max_iter': max_iter}
+        raise ValueError(
+            f"Invalid value of 'optim'.\n'optim' has to be 'nelder-mead', 'powell', 'cg' or 'bfgs' but not '{optim}'"
+        )
+    if isinstance(optim, Optimizer):
+        args = {"f": f, "x0": x0, "tol": tol, "max_iter": max_iter}
         if is_optimizer_grad_based(optim):
-            args['f_grad'] = f_grad
+            args["f_grad"] = f_grad
 
         optim.init(**args)
         return optim
-    else:
-        raise TypeError(f"optim has to be either a string or an instance of 'ceml.optim.optimizer.Optimizer' but not of {type(optim)}")
+    raise TypeError(
+        f"optim has to be either a string or an instance of 'ceml.optim.optimizer.Optimizer' but not of {type(optim)}"
+    )
 
 
 class NelderMead(Optimizer):
@@ -166,6 +169,7 @@ class NelderMead(Optimizer):
     ----
     The Nelder-Mead algorithm is a gradient-free optimization algorithm.
     """
+
     def __init__(self, **kwds):
         self.f = None
         self.x0 = None
@@ -173,7 +177,7 @@ class NelderMead(Optimizer):
         self.max_iter = None
 
         super().__init__(**kwds)
-    
+
     def init(self, f, x0, tol=None, max_iter=None):
         """
         Initializes all parameters.
@@ -206,7 +210,9 @@ class NelderMead(Optimizer):
         return False
 
     def __call__(self):
-        optimum = minimize(fun=self.f, x0=self.x0, tol=self.tol, options={'maxiter': self.max_iter}, method="Nelder-Mead")
+        optimum = minimize(
+            fun=self.f, x0=self.x0, tol=self.tol, options={"maxiter": self.max_iter}, method="Nelder-Mead"
+        )
         return optimum["x"]
 
 
@@ -218,6 +224,7 @@ class Powell(Optimizer):
     ----
     The Powell algorithm is a gradient-free optimization algorithm.
     """
+
     def __init__(self, **kwds):
         self.f = None
         self.x0 = None
@@ -225,7 +232,7 @@ class Powell(Optimizer):
         self.max_iter = None
 
         super().__init__(**kwds)
-    
+
     def init(self, f, x0, tol=None, max_iter=None):
         """
         Initializes all parameters.
@@ -258,7 +265,9 @@ class Powell(Optimizer):
         return False
 
     def __call__(self):
-        optimum = minimize(fun=self.f, x0=self.x0, tol=self.tol, options={'maxiter': self.max_iter}, method="Nelder-Mead")
+        optimum = minimize(
+            fun=self.f, x0=self.x0, tol=self.tol, options={"maxiter": self.max_iter}, method="Nelder-Mead"
+        )
         return optimum["x"]
 
 
@@ -266,6 +275,7 @@ class ConjugateGradients(Optimizer):
     """
     Conjugate gradients optimization algorithm.
     """
+
     def __init__(self, **kwds):
         self.f = None
         self.f_grad = None
@@ -274,7 +284,7 @@ class ConjugateGradients(Optimizer):
         self.max_iter = None
 
         super().__init__(**kwds)
-    
+
     def init(self, f, f_grad, x0, tol=None, max_iter=None):
         """
         Initializes all parameters.
@@ -310,7 +320,9 @@ class ConjugateGradients(Optimizer):
         return False
 
     def __call__(self):
-        optimum = minimize(fun=self.f, x0=self.x0, jac=self.f_grad, tol=self.tol, options={'maxiter': self.max_iter}, method="CG")
+        optimum = minimize(
+            fun=self.f, x0=self.x0, jac=self.f_grad, tol=self.tol, options={"maxiter": self.max_iter}, method="CG"
+        )
         return np.array(optimum["x"])
 
 
@@ -322,6 +334,7 @@ class BFGS(Optimizer):
     ----
     The BFGS optimization algorithm is a Quasi-Newton method.
     """
+
     def __init__(self, **kwds):
         self.f = None
         self.f_grad = None
@@ -330,7 +343,7 @@ class BFGS(Optimizer):
         self.max_iter = None
 
         super().__init__(**kwds)
-    
+
     def init(self, f, f_grad, x0, tol=None, max_iter=None):
         """
         Initializes all parameters.
@@ -366,5 +379,7 @@ class BFGS(Optimizer):
         return False
 
     def __call__(self):
-        optimum = minimize(fun=self.f, x0=self.x0, jac=self.f_grad, tol=self.tol, options={'maxiter': self.max_iter}, method="BFGS")
+        optimum = minimize(
+            fun=self.f, x0=self.x0, jac=self.f_grad, tol=self.tol, options={"maxiter": self.max_iter}, method="BFGS"
+        )
         return np.array(optimum["x"])

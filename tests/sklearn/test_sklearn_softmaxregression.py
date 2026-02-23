@@ -20,7 +20,7 @@ from ceml.sklearn import generate_counterfactual
 from ceml.sklearn.softmaxregression import softmaxregression_generate_counterfactual
 from ceml.sklearn.plausibility import prepare_computation_of_plausible_counterfactuals
 from ceml.optim import Optimizer
-from ceml.backend.jax.costfunctions import LMadCost 
+from ceml.backend.numpy.costfunctions import LMadCost
 
 
 # Custom optimization method that simply calls the BFGS optimizer from scipy
@@ -70,7 +70,7 @@ def test_plausible_counterfactual():
     projection_mean_sub = None
 
     # Fit classifier
-    model = LogisticRegression(multi_class="multinomial", solver="lbfgs", random_state=42)
+    model = LogisticRegression(solver="lbfgs", random_state=42)
     model.fit(X_train, y_train)
 
     # For each class, fit density estimators
@@ -135,7 +135,7 @@ def test_softmaxregression():
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=4242)    # Split data into training and test set
 
-    model = LogisticRegression(solver='lbfgs', multi_class='multinomial')   # Create and fit model
+    model = LogisticRegression(solver='lbfgs')   # Create and fit model
     model.fit(X_train, y_train)
 
     x_orig = X_test[1:4][0,:]   # Select data point for explaining its prediction
@@ -153,7 +153,7 @@ def test_softmaxregression():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=4242)
 
     # Create and fit model
-    model = LogisticRegression(solver='lbfgs', multi_class='multinomial')
+    model = LogisticRegression(solver='lbfgs')
     model.fit(X_train, y_train)
 
     # Select data point for explaining its prediction
@@ -200,7 +200,7 @@ def test_softmaxregression():
     assert y_cf == 0
     assert model.predict(np.array([x_cf])) == 0
 
-    x_cf, y_cf, delta = generate_counterfactual(model, x_orig, 0, features_whitelist=features_whitelist, regularization="l1", C=1.0, optimizer="nelder-mead", return_as_dict=False)
+    x_cf, y_cf, delta = generate_counterfactual(model, x_orig, 0, features_whitelist=features_whitelist, regularization="l1", C=0.1, optimizer="nelder-mead", return_as_dict=False)
     assert y_cf == 0
     assert model.predict(np.array([x_cf])) == 0
 
@@ -229,7 +229,7 @@ def test_softmaxregression():
     assert model.predict(np.array([x_cf])) == 0
     assert all([True if i in features_whitelist else delta[i] == 0. for i in range(x_orig.shape[0])])
 
-    x_cf, y_cf, delta = generate_counterfactual(model, x_orig, 0, features_whitelist=features_whitelist, regularization="l1", C=1.0, optimizer="nelder-mead", return_as_dict=False)
+    x_cf, y_cf, delta = generate_counterfactual(model, x_orig, 0, features_whitelist=features_whitelist, regularization="l1", C=0.1, optimizer="nelder-mead", return_as_dict=False)
     assert y_cf == 0
     assert model.predict(np.array([x_cf])) == 0
     assert all([True if i in features_whitelist else delta[i] == 0. for i in range(x_orig.shape[0])])
@@ -252,7 +252,7 @@ def test_softmaxregression():
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=4242)
 
-    model = LogisticRegression(solver='lbfgs', multi_class='multinomial')
+    model = LogisticRegression(solver='lbfgs')
     model.fit(X_train, y_train)
 
     x_orig = X_test[1:4][0,:]
@@ -276,5 +276,3 @@ def test_softmaxregression():
     with pytest.raises(TypeError):
         SoftmaxCounterfactual(sklearn.linear_model.LinearRegression())
     
-    with pytest.raises(ValueError):
-        SoftmaxCounterfactual(LogisticRegression(multi_class="ovr"))

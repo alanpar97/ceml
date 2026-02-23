@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from random import choice, randint
+
 import numpy as np
-from random import randint, choice
+
 from .optimizer import Optimizer
 
 
@@ -33,7 +35,8 @@ class EvolutionaryOptimizer(Optimizer):
 
         The default is 4.0
     """
-    def __init__(self, population_size=100, select_by_fitness=0.5, mutation_prob=0.1, mutation_scaling=4., **kwds):
+
+    def __init__(self, population_size=100, select_by_fitness=0.5, mutation_prob=0.1, mutation_scaling=4.0, **kwds):
         self.population = []
         self.population_size = population_size
         self.select_by_fitness = select_by_fitness
@@ -46,7 +49,7 @@ class EvolutionaryOptimizer(Optimizer):
         self.max_iter = None
 
         super().__init__(**kwds)
-    
+
     def init(self, f, x0, tol=None, max_iter=None):
         """
         Initializes all remaining parameters.
@@ -72,7 +75,7 @@ class EvolutionaryOptimizer(Optimizer):
         """
         self.f = f
         self.x0 = x0
-        self.tol = tol if tol is not None else 0.
+        self.tol = tol if tol is not None else 0.0
         self.max_iter = max_iter if max_iter is not None else 100
 
     def is_grad_based(self):
@@ -99,7 +102,7 @@ class EvolutionaryOptimizer(Optimizer):
             The representation of first individual.
         x1 : `numpy.array`
             The representation of second individual.
-        
+
         Returns
         -------
         `numpy.array`
@@ -119,7 +122,7 @@ class EvolutionaryOptimizer(Optimizer):
         ----------
         x : `numpy.array`
             The representation of the individual.
-        
+
         Returns
         -------
         `numpy.array`
@@ -130,7 +133,7 @@ class EvolutionaryOptimizer(Optimizer):
                 x[i] += np.random.normal(scale=self.mutation_scaling)
 
         return x
-    
+
     def validate(self, x):
         """
         Validates a given individual `x`.
@@ -153,7 +156,7 @@ class EvolutionaryOptimizer(Optimizer):
             The representation of the validated individual.
         """
         return x
-    
+
     def compute_fitness(self, x):
         """
         Computes the fitness of a given individual `x`.
@@ -163,7 +166,9 @@ class EvolutionaryOptimizer(Optimizer):
         x : `numpy.array`
             The representation of the individual.
         """
-        return -1. * self.f(x)  # Note: We can not use the objective function for computing fitness score because a genetic algorithm maximizes the fitness - but we want to minimize the function! However, minimizing a function is equivalent to maximizing the negative function.
+        return (
+            -1.0 * self.f(x)
+        )  # Note: We can not use the objective function for computing fitness score because a genetic algorithm maximizes the fitness - but we want to minimize the function! However, minimizing a function is equivalent to maximizing the negative function.
 
     def select_candidates(self, fitness):
         """
@@ -182,13 +187,13 @@ class EvolutionaryOptimizer(Optimizer):
         # Select a proportion of the fittest individuals
         fitest = np.argsort(fitness)[::-1]
         n = int(self.population_size * self.select_by_fitness)
-        
+
         return [self.population[i] for i in fitest[:n]]
 
     def optimize(self):
         # Initialize population
         self.population = [self.mutate(np.array(self.x0)) for _ in range(self.population_size)]
-        
+
         # Keep track of the best solution
         fitness = [self.compute_fitness(x) for x in self.population]
         i = np.argsort(fitness)[-1]
@@ -205,7 +210,7 @@ class EvolutionaryOptimizer(Optimizer):
             for _ in range(len(self.population) - self.population_size):
                 x0 = choice(self.population)
                 x1 = choice(self.population)
-                
+
                 offsprings.append(self.mutate(self.crossover(x0, x1)))
             self.population += offsprings
 
@@ -215,5 +220,5 @@ class EvolutionaryOptimizer(Optimizer):
             if fitness[i] > best_score:
                 best_score = fitness[i]
                 best_sample = self.population[i]
-   
+
         return best_sample

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-import jax.numpy as npx
-import numpy as np
 import cvxpy as cp
+import numpy as np
+import numpy as npx
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
-from ..backend.jax.layer import log_multivariate_normal, create_tensor
-from ..backend.jax.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.layer import create_tensor, log_multivariate_normal
 from ..model import ModelWithLoss
+from ..optim import DCQP, SDP, MathematicalProgram
 from .counterfactual import SklearnCounterfactual
-from ..optim import MathematicalProgram, SDP, DCQP
 
 
 class Qda(ModelWithLoss):
@@ -39,9 +39,12 @@ class Qda(ModelWithLoss):
     TypeError
         If `model` is not an instance of :class:`sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis`
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, QuadraticDiscriminantAnalysis):
-            raise TypeError(f"model has to be an instance of 'sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis' but not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis' but not of {type(model)}"
+            )
 
         self.class_priors = model.priors_
         self.means = model.means_
@@ -49,9 +52,9 @@ class Qda(ModelWithLoss):
 
         self.dim = self.means.shape[1]
         self.is_binary = self.means.shape[0] == 2
-        
+
         super().__init__(**kwds)
-    
+
     def predict(self, x):
         """Predict the output of a given input.
 
@@ -61,13 +64,18 @@ class Qda(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` that is going to be classified.
-        
+
         Returns
         -------
         `jax.numpy.array`
             An array containing the class probabilities.
         """
-        log_proba = create_tensor([npx.log(self.class_priors[i]) + log_multivariate_normal(x, self.means[i], self.sigma_inv[i], self.dim) for i in range(len(self.class_priors))])
+        log_proba = create_tensor(
+            [
+                npx.log(self.class_priors[i]) + log_multivariate_normal(x, self.means[i], self.sigma_inv[i], self.dim)
+                for i in range(len(self.class_priors))
+            ]
+        )
         proba = npx.exp(log_proba)
 
         return proba / npx.sum(proba)
@@ -87,7 +95,7 @@ class Qda(ModelWithLoss):
             If `pred` is None, the class method `predict` is used for mapping the input to the output (class probabilities)
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.NegLogLikelihoodCost`
@@ -95,8 +103,7 @@ class Qda(ModelWithLoss):
         """
         if pred is None:
             return NegLogLikelihoodCost(self.predict, y_target)
-        else:
-            return NegLogLikelihoodCost(pred, y_target)
+        return NegLogLikelihoodCost(pred, y_target)
 
 
 class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
@@ -104,9 +111,10 @@ class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         super().__init__(model=model, **kwds)
-    
+
     def rebuild_model(self, model):
         """Rebuild a :class:`sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis` model.
 
@@ -115,7 +123,7 @@ class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
         Parameters
         ----------
         model : instance of :class:`sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis`
-            The `sklearn` qda model - note that `store_covariance` must be set to True. 
+            The `sklearn` qda model - note that `store_covariance` must be set to True.
 
         Returns
         -------
@@ -123,19 +131,33 @@ class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
             The wrapped qda model.
         """
         if not isinstance(model, QuadraticDiscriminantAnalysis):
-            raise TypeError(f"model has to be an instance of 'sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis' but not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis' but not of {type(model)}"
+            )
         if not hasattr(model, "covariance_"):
-            raise AttributeError("You have to set store_covariance=True when instantiating a new sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis model")
+            raise AttributeError(
+                "You have to set store_covariance=True when instantiating a new sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis model"
+            )
 
         return Qda(model)
-    
+
     def _build_constraints(self, var_X, var_x, y):
         i = int(y)
         j = 0 if y == 1 else 1
 
-        A = .5 * (self.mymodel.sigma_inv[i] - self.mymodel.sigma_inv[j])
-        b = np.dot(self.mymodel.sigma_inv[j], self.mymodel.means[j]) - np.dot(self.mymodel.sigma_inv[i], self.mymodel.means[i])
-        c = np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i]) + 0.5 * np.log(np.linalg.det(self.mymodel.sigma_inv[j]) / np.linalg.det(self.mymodel.sigma_inv[i])) + 0.5 * (self.mymodel.means[i].T.dot(self.mymodel.sigma_inv[i]).dot(self.mymodel.means[i]) - self.mymodel.means[j].T.dot(self.mymodel.sigma_inv[j]).dot(self.mymodel.means[j]))
+        A = 0.5 * (self.mymodel.sigma_inv[i] - self.mymodel.sigma_inv[j])
+        b = np.dot(self.mymodel.sigma_inv[j], self.mymodel.means[j]) - np.dot(
+            self.mymodel.sigma_inv[i], self.mymodel.means[i]
+        )
+        c = (
+            np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i])
+            + 0.5 * np.log(np.linalg.det(self.mymodel.sigma_inv[j]) / np.linalg.det(self.mymodel.sigma_inv[i]))
+            + 0.5
+            * (
+                self.mymodel.means[i].T.dot(self.mymodel.sigma_inv[i]).dot(self.mymodel.means[i])
+                - self.mymodel.means[j].T.dot(self.mymodel.sigma_inv[j]).dot(self.mymodel.means[j])
+            )
+        )
 
         if self.is_affine_preprocessing_set():  # If necessary, apply affine preprocessing
             c = c + self.b.T @ b + self.b.T @ A @ self.b
@@ -146,29 +168,55 @@ class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
 
     def _build_solve_dcqp(self, x_orig, y_target, regularization, features_whitelist, optimizer_args):
         x_orig_prime = self._apply_affine_preprocessing_to_const(x_orig)
-        
-        Q0 = np.eye(self.mymodel.dim)   # TODO: Can be ignored if regularization != l2
+
+        Q0 = np.eye(self.mymodel.dim)  # TODO: Can be ignored if regularization != l2
         Q1 = np.zeros((self.mymodel.dim, self.mymodel.dim))
-        q = -2. * x_orig_prime
+        q = -2.0 * x_orig_prime
         c = 0.0
 
         A0_i = []
         A1_i = []
         b_i = []
         r_i = []
-        
+
         i = y_target
         for j in filter(lambda z: z != y_target, range(len(self.mymodel.means))):
-            A0_i.append(.5 * self.mymodel.sigma_inv[i])
-            A1_i.append(.5 * self.mymodel.sigma_inv[j])
-            b_i.append(np.dot(self.mymodel.sigma_inv[j], self.mymodel.means[j]) - np.dot(self.mymodel.sigma_inv[i], self.mymodel.means[i]))
-            r_i.append(np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i]) + .5 * np.log(np.linalg.det(self.mymodel.sigma_inv[j]) / np.linalg.det(self.mymodel.sigma_inv[i])) + .5 * (self.mymodel.means[i].T.dot(self.mymodel.sigma_inv[i]).dot(self.mymodel.means[i]) - self.mymodel.means[j].T.dot(self.mymodel.sigma_inv[j]).dot(self.mymodel.means[j])))
+            A0_i.append(0.5 * self.mymodel.sigma_inv[i])
+            A1_i.append(0.5 * self.mymodel.sigma_inv[j])
+            b_i.append(
+                np.dot(self.mymodel.sigma_inv[j], self.mymodel.means[j])
+                - np.dot(self.mymodel.sigma_inv[i], self.mymodel.means[i])
+            )
+            r_i.append(
+                np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i])
+                + 0.5 * np.log(np.linalg.det(self.mymodel.sigma_inv[j]) / np.linalg.det(self.mymodel.sigma_inv[i]))
+                + 0.5
+                * (
+                    self.mymodel.means[i].T.dot(self.mymodel.sigma_inv[i]).dot(self.mymodel.means[i])
+                    - self.mymodel.means[j].T.dot(self.mymodel.sigma_inv[j]).dot(self.mymodel.means[j])
+                )
+            )
 
-        self.build_program(self.model, x_orig, y_target, Q0, Q1, q, c, A0_i, A1_i, b_i, r_i, features_whitelist=features_whitelist, mad=None if regularization != "l1" else np.ones(x_orig.shape[0]), optimizer_args=optimizer_args)
-        
+        self.build_program(
+            self.model,
+            x_orig,
+            y_target,
+            Q0,
+            Q1,
+            q,
+            c,
+            A0_i,
+            A1_i,
+            b_i,
+            r_i,
+            features_whitelist=features_whitelist,
+            mad=None if regularization != "l1" else np.ones(x_orig.shape[0]),
+            optimizer_args=optimizer_args,
+        )
+
         return DCQP.solve(self, x0=self.mymodel.means[i])
 
-    def solve(self, x_orig, y_target, regularization, features_whitelist, return_as_dict, optimizer_args):   
+    def solve(self, x_orig, y_target, regularization, features_whitelist, return_as_dict, optimizer_args):
         xcf = None
         if self.mymodel.is_binary and regularization != "l1":
             xcf = self.build_solve_opt(x_orig, y_target, features_whitelist, optimizer_args)
@@ -177,15 +225,27 @@ class QdaCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
         delta = x_orig - xcf
 
         if self._model_predict([xcf]) != y_target:
-            raise Exception("No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again")
+            raise Exception(
+                "No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again"
+            )
 
         if return_as_dict is True:
             return self._SklearnCounterfactual__build_result_dict(xcf, y_target, delta)
-        else:
-            return xcf, y_target, delta
+        return xcf, y_target, delta
 
 
-def qda_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="auto", optimizer_args=None, return_as_dict=True, done=None):
+def qda_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="auto",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -198,14 +258,14 @@ def qda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -249,7 +309,7 @@ def qda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -263,4 +323,6 @@ def qda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         else:
             optimizer = "nelder-mead"
 
-    return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
+    return cf.compute_counterfactual(
+        x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+    )

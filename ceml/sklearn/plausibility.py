@@ -10,9 +10,9 @@ def estimate_densities_of_training_samples_via_gmm(X, y, gmms):
 
     # Compute densities of all samples
     for i in range(X.shape[0]):
-        gmm = gmms[y[i]]    # Select the class dependent GMM
-        
-        x = X[i,:]
+        gmm = gmms[y[i]]  # Select the class dependent GMM
+
+        x = X[i, :]
         z = []
         dim = x.shape[0]
         for j in range(gmm.weights_.shape[0]):
@@ -21,16 +21,18 @@ def estimate_densities_of_training_samples_via_gmm(X, y, gmms):
             cov = gmm.covariances_[j]
             cov = np.linalg.inv(cov)
 
-            b = -2.*np.log(w_i) + dim*np.log(2.*np.pi) - np.log(np.linalg.det(cov))
-            z.append(np.dot(x - x_i, np.dot(cov, x - x_i)) + b) # NLL
-        
+            b = -2.0 * np.log(w_i) + dim * np.log(2.0 * np.pi) - np.log(np.linalg.det(cov))
+            z.append(np.dot(x - x_i, np.dot(cov, x - x_i)) + b)  # NLL
+
         densities.append(np.min(z))
         densities_ex.append(z)
 
     return np.array(densities), np.array(densities_ex)
 
 
-def prepare_computation_of_plausible_counterfactuals(X, y, gmms, projection_mean_sub=None, projection_matrix=None, density_thresholds=None):
+def prepare_computation_of_plausible_counterfactuals(
+    X, y, gmms, projection_mean_sub=None, projection_matrix=None, density_thresholds=None
+):
     """
     Computes all steps that are independent of a concrete sample when computing a plausible counterfactual explanations.
     Because the computation of a plausible counterfactual requires quite an amount of computation that does not depend on the concret sample we want to explain, it make sense to pre compute as much as possible (reduce redundant computations).
@@ -84,7 +86,7 @@ def prepare_computation_of_plausible_counterfactuals(X, y, gmms, projection_mean
     results["gmm_weights"] = []
     results["gmm_means"] = []
     results["gmm_covariances"] = []
-            
+
     for i in y_targets:
         results["gmm_weights"].append(np.array(gmms[i].weights_))
         results["gmm_means"].append(np.array(gmms[i].means_))
@@ -98,11 +100,18 @@ def prepare_computation_of_plausible_counterfactuals(X, y, gmms, projection_mean
     # Compute (class dependent) high density ellipsoids - constraint: test if sample is included in ellipsoid -> this is the same as the proposed constraint but nummerically much more stable, in particular when we add a dimensionality reduction from a high dimensional space to a low dimensional space
     results["ellipsoids_r"] = []
     for y_ in y_targets:
-        gmm = gmms[y_]    # Select the class dependent GMM
-        idx = y == y_     # Select all samples of the current label
+        gmm = gmms[y_]  # Select the class dependent GMM
+        idx = y == y_  # Select all samples of the current label
 
-        cluster_prob_ = gmm.predict_proba(X_[idx,:])    # TODO: Currently not needed!
-        r = HighDensityEllipsoids(X_[idx,:], densities_ex[idx], cluster_prob_, gmm.means_, gmm.covariances_, density_thresholds[list(y_targets).index(y_)]).compute_ellipsoids()
+        cluster_prob_ = gmm.predict_proba(X_[idx, :])  # TODO: Currently not needed!
+        r = HighDensityEllipsoids(
+            X_[idx, :],
+            densities_ex[idx],
+            cluster_prob_,
+            gmm.means_,
+            gmm.covariances_,
+            density_thresholds[list(y_targets).index(y_)],
+        ).compute_ellipsoids()
         results["ellipsoids_r"].append(r)
 
     return results

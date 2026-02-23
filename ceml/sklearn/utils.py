@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from ..backend.jax.costfunctions import NegLogLikelihoodCost, L1Cost, L2Cost, l1, l2, DummyCost
-from ..backend.jax.layer import create_tensor
-from ..optim import NelderMead, Powell, ConjugateGradients, BFGS, InputWrapper, is_optimizer_grad_based
+from ..backend.numpy.costfunctions import DummyCost, L1Cost, L2Cost, l1, l2
+from ..backend.numpy.layer import create_tensor
 from ..costfunctions import CostFunction
+from ..optim import InputWrapper, is_optimizer_grad_based
 
 
 def desc_to_dist(desc):
@@ -18,12 +18,12 @@ def desc_to_dist(desc):
     ----------
     desc : `str`
         Description of the distance metric.
-    
+
     Returns
     -------
     `callable`
         The distance function implemented as a `jax.numpy` function.
-    
+
     Raises
     ------
     ValueError
@@ -31,10 +31,9 @@ def desc_to_dist(desc):
     """
     if desc == "l1":
         return l1
-    elif desc == "l2":
+    if desc == "l2":
         return l2
-    else:
-        raise ValueError(f"Invalid value for 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
+    raise ValueError(f"Invalid value for 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
 
 
 def desc_to_regcost(desc, x, input_wrapper):
@@ -54,12 +53,12 @@ def desc_to_regcost(desc, x, input_wrapper):
         The original input from which we do not want to deviate much.
     input_wrapper : `callable`
         Converts the input (e.g. if we want to exclude some features/dimensions, we might have to include these missing features before applying any function to it).
-    
+
     Returns
     -------
     `callable`
         The regularization function implemented as a `jax.numpy` function.
-    
+
     Raises
     ------
     ValueError
@@ -67,10 +66,9 @@ def desc_to_regcost(desc, x, input_wrapper):
     """
     if desc == "l1":
         return L1Cost(x, input_wrapper)
-    elif desc == "l2":
+    if desc == "l2":
         return L2Cost(x, input_wrapper)
-    else:
-        raise ValueError(f"Invalid value for 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
+    raise ValueError(f"Invalid value for 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
 
 
 def build_regularization_loss(regularization, x, input_wrapper=None):
@@ -93,12 +91,12 @@ def build_regularization_loss(regularization, x, input_wrapper=None):
         If `input_wrapper` is None, the input is passed without any modifications.
 
         The default is None.
-        
+
     Returns
     -------
     `callable`
         An instance of :class:`ceml.costfunctions.costfunctions.CostFunction` or the user defined, callable, regularization.
-    
+
     Raises
     ------
     TypeError
@@ -106,12 +104,13 @@ def build_regularization_loss(regularization, x, input_wrapper=None):
     """
     if isinstance(regularization, str):
         return desc_to_regcost(regularization, x, input_wrapper)
-    elif regularization is None:
+    if regularization is None:
         return DummyCost()
-    elif not isinstance(regularization, CostFunction):
-        raise TypeError("'regularization' has to be either an instance of CostFunction or a valid description of a supported regularization")
-    else:
-        return regularization
+    if not isinstance(regularization, CostFunction):
+        raise TypeError(
+            "'regularization' has to be either an instance of CostFunction or a valid description of a supported regularization"
+        )
+    return regularization
 
 
 def features_whitelist_to_mask(features_whitelist, x):
@@ -121,12 +120,18 @@ def features_whitelist_to_mask(features_whitelist, x):
 def wrap_input(features_whitelist, x, model, optimizer):
     input_wrapper = InputWrapper(features_whitelist, x)
     grad_based_solver = is_optimizer_grad_based(optimizer)
-    grad_mask = features_whitelist_to_mask(features_whitelist, x) if grad_based_solver is True and features_whitelist is not None else None
-    
+    grad_mask = (
+        features_whitelist_to_mask(features_whitelist, x)
+        if grad_based_solver is True and features_whitelist is not None
+        else None
+    )
+
     pred = model.predict
     x_orig = x
-    if grad_based_solver is not True and features_whitelist is not None:    # If we use a gradient based solver, we mask the gradient
+    if (
+        grad_based_solver is not True and features_whitelist is not None
+    ):  # If we use a gradient based solver, we mask the gradient
         pred = lambda z: model.predict(input_wrapper(z))
         x_orig = input_wrapper.extract_from(x)
-    
+
     return input_wrapper, x_orig, pred, grad_mask

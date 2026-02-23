@@ -1,21 +1,30 @@
 # -*- coding: utf-8 -*-
 import sklearn
-import sklearn_lvq
 
-from .softmaxregression import softmaxregression_generate_counterfactual
-from .linearregression import linearregression_generate_counterfactual
-from .naivebayes import gaussiannb_generate_counterfactual
 from .decisiontree import decisiontree_generate_counterfactual
-from .randomforest import randomforest_generate_counterfactual
 from .isolationforest import isolationforest_generate_counterfactual
 from .knn import knn_generate_counterfactual
-from .lvq import lvq_generate_counterfactual
 from .lda import lda_generate_counterfactual
+from .linearregression import linearregression_generate_counterfactual
+from .naivebayes import gaussiannb_generate_counterfactual
 from .qda import qda_generate_counterfactual
-from .pipeline import pipeline_generate_counterfactual
+from .randomforest import randomforest_generate_counterfactual
+from .softmaxregression import softmaxregression_generate_counterfactual
 
 
-def generate_counterfactual(model, x, y_target, features_whitelist=None, dist="l2", regularization="l1", C=1.0, optimizer="auto", optimizer_args=None, return_as_dict=True, done=None):
+def generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    dist="l2",
+    regularization="l1",
+    C=1.0,
+    optimizer="auto",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -28,7 +37,7 @@ def generate_counterfactual(model, x, y_target, features_whitelist=None, dist="l
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
@@ -48,12 +57,12 @@ def generate_counterfactual(model, x, y_target, features_whitelist=None, dist="l
 
         Note
         ----
-        Only needed if `model` is a LVQ or KNN model!
+        Only needed if `model` is a KNN model!
     regularization : `str` or callable, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
 
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -103,33 +112,127 @@ def generate_counterfactual(model, x, y_target, features_whitelist=None, dist="l
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     ValueError
         If `model` contains an unsupported model.
     """
-    if isinstance(model, sklearn.pipeline.Pipeline):
-        return pipeline_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.linear_model.LogisticRegression):
-        return softmaxregression_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.linear_model._base.LinearModel):
-        return linearregression_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.naive_bayes.GaussianNB):
-        return gaussiannb_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.discriminant_analysis.LinearDiscriminantAnalysis):
-        return lda_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis):
-        return qda_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.tree.DecisionTreeClassifier) or isinstance(model, sklearn.tree.DecisionTreeRegressor):
-        return decisiontree_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, return_as_dict=return_as_dict, done=done)
-    elif isinstance(model, sklearn.ensemble.RandomForestClassifier) or isinstance(model, sklearn.ensemble.RandomForestRegressor):
-        return randomforest_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict)
-    elif isinstance(model, sklearn.ensemble.IsolationForest):
-        return isolationforest_generate_counterfactual(model, x, y_target, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict)
-    elif isinstance(model, sklearn.neighbors.KNeighborsClassifier) or isinstance(model, sklearn.neighbors.KNeighborsRegressor):
-        return knn_generate_counterfactual(model, x, y_target, dist=dist, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    elif any([isinstance(model, t) for t in [sklearn_lvq.GlvqModel, sklearn_lvq.GmlvqModel, sklearn_lvq.LgmlvqModel, sklearn_lvq.RslvqModel, sklearn_lvq.MrslvqModel, sklearn_lvq.LmrslvqModel]]):
-        return lvq_generate_counterfactual(model, x, y_target, dist=dist, features_whitelist=features_whitelist, regularization=regularization, C=C, optimizer=optimizer, optimizer_args=optimizer_args, return_as_dict=return_as_dict, done=done)
-    else:
-        raise ValueError(f"{type(model)} is not supported")
+    if isinstance(model, sklearn.linear_model.LogisticRegression):
+        return softmaxregression_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.linear_model._base.LinearModel):
+        return linearregression_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.naive_bayes.GaussianNB):
+        return gaussiannb_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.discriminant_analysis.LinearDiscriminantAnalysis):
+        return lda_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis):
+        return qda_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.tree.DecisionTreeClassifier) or isinstance(model, sklearn.tree.DecisionTreeRegressor):
+        return decisiontree_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    if isinstance(model, sklearn.ensemble.RandomForestClassifier) or isinstance(
+        model, sklearn.ensemble.RandomForestRegressor
+    ):
+        return randomforest_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+        )
+    if isinstance(model, sklearn.ensemble.IsolationForest):
+        return isolationforest_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+        )
+    if isinstance(model, sklearn.neighbors.KNeighborsClassifier) or isinstance(
+        model, sklearn.neighbors.KNeighborsRegressor
+    ):
+        return knn_generate_counterfactual(
+            model,
+            x,
+            y_target,
+            dist=dist,
+            features_whitelist=features_whitelist,
+            regularization=regularization,
+            C=C,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            return_as_dict=return_as_dict,
+            done=done,
+        )
+    raise ValueError(f"{type(model)} is not supported")

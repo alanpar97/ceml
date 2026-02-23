@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import sklearn.linear_model
 import numpy as np
+import sklearn.linear_model
 
-from ..backend.jax.layer import affine, create_tensor
-from ..backend.jax.costfunctions import RegularizedCost, SquaredError
+from ..backend.numpy.costfunctions import SquaredError
+from ..backend.numpy.layer import affine
 from ..model import ModelWithLoss
+from ..optim import ConvexQuadraticProgram, MathematicalProgram
 from .counterfactual import SklearnCounterfactual
-from ..optim import MathematicalProgram, ConvexQuadraticProgram
 
 
 class LinearRegression(ModelWithLoss):
@@ -28,9 +28,12 @@ class LinearRegression(ModelWithLoss):
     dim : `int`
         Dimensionality of the input data.
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, sklearn.linear_model._base.LinearModel):
-            raise TypeError(f"model has to be an instance of a linear regression model like 'sklearn.linear_model.LinearRegression', 'sklearn.linear_model.Ridge', 'sklearn.linear_model.Lasso', 'sklearn.linear_model.HuberRegressor' or 'sklearn.linear_model.ElasticNet' but not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of a linear regression model like 'sklearn.linear_model.LinearRegression', 'sklearn.linear_model.Ridge', 'sklearn.linear_model.Lasso', 'sklearn.linear_model.HuberRegressor' or 'sklearn.linear_model.ElasticNet' but not of {type(model)}"
+            )
 
         self.w = model.coef_
         self.b = model.intercept_
@@ -47,14 +50,14 @@ class LinearRegression(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` whose output is going to be predicted.
-        
+
         Returns
         -------
         `jax.numpy.array`
             An array containing the predicted output.
         """
         return affine(x, self.w, self.b)
-    
+
     def get_loss(self, y_target, pred=None):
         """Creates and returns a loss function.
 
@@ -70,7 +73,7 @@ class LinearRegression(ModelWithLoss):
             If `pred` is None, the class method `predict` is used for mapping the input to the output (regression)
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.SquaredError`
@@ -78,8 +81,7 @@ class LinearRegression(ModelWithLoss):
         """
         if pred is None:
             return SquaredError(self.predict, y_target)
-        else:
-            return SquaredError(pred, y_target)
+        return SquaredError(pred, y_target)
 
 
 class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadraticProgram):
@@ -87,9 +89,10 @@ class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram,
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         super().__init__(model=model, **kwds)
-    
+
     def rebuild_model(self, model):
         """Rebuild a :class:`sklearn.linear_model.base.LinearModel` model.
 
@@ -98,7 +101,7 @@ class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram,
         Parameters
         ----------
         model : instance of :class:`sklearn.linear_model.base.LinearModel`
-            The `sklearn` linear regression model (e.g. :class:`sklearn.linear_model.LinearRegression` or :class:`sklearn.linear_model.Ridge`). 
+            The `sklearn` linear regression model (e.g. :class:`sklearn.linear_model.LinearRegression` or :class:`sklearn.linear_model.Ridge`).
 
         Returns
         -------
@@ -106,10 +109,12 @@ class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram,
             The wrapped linear regression model.
         """
         if not isinstance(model, sklearn.linear_model._base.LinearModel):
-            raise TypeError(f"model has to be an instance of a linear regression model like 'sklearn.linear_model.LinearRegression', 'sklearn.linear_model.Ridge', 'sklearn.linear_model.Lasso', 'sklearn.linear_model.HuberRegressor' or 'sklearn.linear_model.ElasticNet' but not of {type(model)}")
-    
+            raise TypeError(
+                f"model has to be an instance of a linear regression model like 'sklearn.linear_model.LinearRegression', 'sklearn.linear_model.Ridge', 'sklearn.linear_model.Lasso', 'sklearn.linear_model.HuberRegressor' or 'sklearn.linear_model.ElasticNet' but not of {type(model)}"
+            )
+
         return LinearRegression(model)
-    
+
     def _build_constraints(self, var_x, y):
         constraints = []
 
@@ -119,7 +124,7 @@ class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram,
         # Build box constraints
         constraints.append(self.mymodel.w @ var_x_ + self.mymodel.b - y <= self.epsilon)
         constraints.append(-self.mymodel.w @ var_x_ - self.mymodel.b + y <= self.epsilon)
-        
+
         return constraints
 
     def solve(self, x_orig, y_target, regularization, features_whitelist, return_as_dict, optimizer_args):
@@ -132,11 +137,21 @@ class LinearRegressionCounterfactual(SklearnCounterfactual, MathematicalProgram,
 
         if return_as_dict is True:
             return self._SklearnCounterfactual__build_result_dict(xcf, y_target, delta)
-        else:
-            return xcf, self._model_predict([xcf]), delta
+        return xcf, self._model_predict([xcf]), delta
 
 
-def linearregression_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="mp", optimizer_args=None, return_as_dict=True, done=None):
+def linearregression_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="mp",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -149,15 +164,15 @@ def linearregression_generate_counterfactual(model, x, y_target, features_whitel
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
-        
+
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -207,7 +222,7 @@ def linearregression_generate_counterfactual(model, x, y_target, features_whitel
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -218,4 +233,6 @@ def linearregression_generate_counterfactual(model, x, y_target, features_whitel
     if optimizer == "auto":
         optimizer = "mp"
 
-    return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
+    return cf.compute_counterfactual(
+        x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+    )

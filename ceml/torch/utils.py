@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from ..backend.torch.layer import create_tensor
-from ..backend.torch.costfunctions import L1Cost, L2Cost, l1, l2, NegLogLikelihoodCost, DummyCost
-from ..optim import is_optimizer_grad_based, InputWrapper
+
+from ..backend.torch.costfunctions import DummyCost, L1Cost, L2Cost, l1, l2
 from ..costfunctions import CostFunction
+from ..optim import InputWrapper, is_optimizer_grad_based
 
 
 def desc_to_dist(desc):
@@ -19,12 +19,12 @@ def desc_to_dist(desc):
     ----------
     desc : `str`
         Description of the distance metric.
-    
+
     Returns
     -------
     `callable`
         The distance function implemented as a `torch` function.
-    
+
     Raises
     ------
     ValueError
@@ -32,10 +32,9 @@ def desc_to_dist(desc):
     """
     if desc == "l1":
         return l1
-    elif desc == "l2":
+    if desc == "l2":
         return l2
-    else:
-        raise ValueError(f"Invalid value of 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
+    raise ValueError(f"Invalid value of 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
 
 
 def desc_to_regcost(desc, x, input_wrapper):
@@ -62,7 +61,7 @@ def desc_to_regcost(desc, x, input_wrapper):
     -------
     `callable`
         The regularization function implemented as a `torch` function.
-    
+
     Raises
     ------
     ValueError
@@ -70,10 +69,9 @@ def desc_to_regcost(desc, x, input_wrapper):
     """
     if desc == "l1":
         return L1Cost(x)
-    elif desc == "l2":
+    if desc == "l2":
         return L2Cost(x)
-    else:
-        raise ValueError(f"Invalid value of 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
+    raise ValueError(f"Invalid value of 'desc'.\n'desc' has to be 'l1' or 'l2' but not '{desc}'")
 
 
 def build_regularization_loss(regularization, x, input_wrapper=None):
@@ -101,7 +99,7 @@ def build_regularization_loss(regularization, x, input_wrapper=None):
     -------
     `callable`
         An instance of :class:`ceml.costfunctions.costfunctions.CostFunction` or the user defined, callable, regularization.
-    
+
     Raises
     ------
     TypeError
@@ -109,12 +107,13 @@ def build_regularization_loss(regularization, x, input_wrapper=None):
     """
     if isinstance(regularization, str):
         return desc_to_regcost(regularization, x, input_wrapper)
-    elif regularization is None:
+    if regularization is None:
         return DummyCost()
-    elif not isinstance(regularization, CostFunction):
-        raise TypeError("'regularization' has to be either an instance of CostFunction or a valid description of a supported regularization")
-    else:
-        return regularization
+    if not isinstance(regularization, CostFunction):
+        raise TypeError(
+            "'regularization' has to be either an instance of CostFunction or a valid description of a supported regularization"
+        )
+    return regularization
 
 
 def features_whitelist_to_mask(features_whitelist, x, device):
@@ -123,13 +122,19 @@ def features_whitelist_to_mask(features_whitelist, x, device):
 
 def wrap_input(features_whitelist, x, model, optimizer, device):
     input_wrapper = InputWrapper(features_whitelist, x)
-    grad_based_solver = is_optimizer_grad_based(optimizer) if isinstance(optimizer, str) is True else True    # We assume that all PyTorch optimizers are gradient based optimizers
-    grad_mask = features_whitelist_to_mask(features_whitelist, x, device) if grad_based_solver is True and features_whitelist is not None else None
-    
+    grad_based_solver = (
+        is_optimizer_grad_based(optimizer) if isinstance(optimizer, str) is True else True
+    )  # We assume that all PyTorch optimizers are gradient based optimizers
+    grad_mask = (
+        features_whitelist_to_mask(features_whitelist, x, device)
+        if grad_based_solver is True and features_whitelist is not None
+        else None
+    )
+
     pred = model.predict
     x_orig = x
     if grad_based_solver is not True and features_whitelist is not None:
         pred = lambda z: model.predict(input_wrapper(z))
         x_orig = input_wrapper.extract_from(x)
-    
+
     return input_wrapper, x_orig, pred, grad_mask
