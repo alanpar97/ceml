@@ -6,12 +6,16 @@ Counterfactuals for Explaining Machine Learning models
 --------------------------------------------------------
 
 CEML is a Python toolbox for computing counterfactuals. Counterfactuals can be used to explain the predictions of machine learing models.
+**Notes from this fork**
+This fork has done some refactoring to be compatible with Python 3.12. On the other hand it has removed some features to make this toolbox more lightweight.
+For example, the original JAX backend was replaced for numpy+scipy backend. Support for some frameworks (e.g. Pipeline from scikit-learn, Tensorflow, and sklearn-lvq) was removed.
+
+If you need one of those features, please refer to the `original repository <https://github.com/andreArtelt/ceml>`_.
 
 It supports many common machine learning frameworks:
 
     - scikit-learn (1.5.0)
     - PyTorch (2.0.1)
-    - Keras & Tensorflow (2.13.1)
 
 Furthermore, CEML is easy to use and can be extended very easily. See the following user guide for more information on how to use and extend CEML.
 
@@ -20,18 +24,9 @@ Furthermore, CEML is easy to use and can be extended very easily. See the follow
 Installation
 ------------
 
-**Note: Python 3.8 is required!**
+**Note: Python 3.12 is required!**
 
 Tested on Ubuntu -- note that some people reported problems with some dependencies on Windows!
-
-PyPI
-++++
-
-.. code-block:: bash
-
-    pip install ceml
-
-**Note**: The package hosted on PyPI uses the cpu only. If you want to use the gpu, you have to install CEML manually - see next section.
 
 Git
 +++
@@ -39,7 +34,7 @@ Download or clone the repository:
 
 .. code:: bash
 
-    git clone https://github.com/andreArtelt/ceml.git
+    git clone https://github.com/alanpar97/ceml.git
     cd ceml
 
 Install all requirements (listed in ``requirements.txt``):
@@ -47,8 +42,6 @@ Install all requirements (listed in ``requirements.txt``):
 .. code:: bash
 
     pip install -r requirements.txt
-
-**Note**: If you want to use a gpu/tpu, you have to install the gpu version of jax, tensorflow and pytorch manually. Do not use ``pip install -r requirements.txt``.
 
 Install the toolbox itself:
 
@@ -95,7 +88,7 @@ Quick example
 Documentation
 -------------
 
-Documentation is available on readthedocs:`https://ceml.readthedocs.io/en/latest/ <https://ceml.readthedocs.io/en/latest/>`_
+Documentation of the original code is available on readthedocs:`https://ceml.readthedocs.io/en/latest/ <https://ceml.readthedocs.io/en/latest/>`_
 
 License
 -------
@@ -123,9 +116,6 @@ Third party components
 
     - `numpy <https://github.com/numpy/numpy>`_
     - `scipy <https://github.com/scipy/scipy>`_
-    - `jax <https://github.com/google/jax>`_
     - `cvxpy <https://github.com/cvxgrp/cvxpy>`_
     - `scikit-learn <https://github.com/scikit-learn/scikit-learn>`_
-    - `sklearn-lvq <https://github.com/MrNuggelz/sklearn-lvq>`_
     - `PyTorch <https://github.com/pytorch/pytorch>`_
-    - `tensorflow <https://github.com/tensorflow>`_
