@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-import jax.numpy as npx
-import numpy as np
 import cvxpy as cp
+import numpy as np
+import numpy as npx
 import sklearn.naive_bayes
 
-from ..backend.jax.layer import log_normal_distribution, create_tensor
-from ..backend.jax.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.layer import create_tensor, log_normal_distribution
 from ..model import ModelWithLoss
+from ..optim import DCQP, SDP, MathematicalProgram
 from .counterfactual import SklearnCounterfactual
-from ..optim import MathematicalProgram, SDP, DCQP
 
 
 class GaussianNB(ModelWithLoss):
@@ -34,6 +34,7 @@ class GaussianNB(ModelWithLoss):
     is_binary : `boolean`
         True if `model` is a binary classifier, False otherwise.
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, sklearn.naive_bayes.GaussianNB):
             raise TypeError(f"model has to be an instance of 'sklearn.naive_bayes.GaussianNB' but not of {type(model)}")
@@ -44,7 +45,7 @@ class GaussianNB(ModelWithLoss):
 
         self.dim = self.means.shape[1]
         self.is_binary = self.means.shape[0] == 2
-        
+
         super().__init__(**kwds)
 
     def predict(self, x):
@@ -56,19 +57,26 @@ class GaussianNB(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` that is going to be classified.
-        
+
         Returns
         -------
         `jax.numpy.array`
             An array containing the class probabilities.
         """
-        feature_wise_normal = lambda z, mu, v: npx.sum(npx.array([log_normal_distribution(z[i], mu[i], v[i]) for i in range(z.shape[0])]))
+        feature_wise_normal = lambda z, mu, v: npx.sum(
+            npx.array([log_normal_distribution(z[i], mu[i], v[i]) for i in range(z.shape[0])])
+        )
 
-        log_proba = create_tensor([npx.log(self.class_priors[i]) + feature_wise_normal(x, self.means[i], self.variances[i]) for i in range(len(self.class_priors))])
+        log_proba = create_tensor(
+            [
+                npx.log(self.class_priors[i]) + feature_wise_normal(x, self.means[i], self.variances[i])
+                for i in range(len(self.class_priors))
+            ]
+        )
         proba = npx.exp(log_proba)
 
         return proba / npx.sum(proba)
-    
+
     def get_loss(self, y_target, pred=None):
         """Creates and returns a loss function.
 
@@ -84,7 +92,7 @@ class GaussianNB(ModelWithLoss):
             If `pred` is None, the class method `predict` is used for mapping the input to the output (class probabilities)
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.NegLogLikelihoodCost`
@@ -92,8 +100,7 @@ class GaussianNB(ModelWithLoss):
         """
         if pred is None:
             return NegLogLikelihoodCost(self.predict, y_target)
-        else:
-            return NegLogLikelihoodCost(pred, y_target)
+        return NegLogLikelihoodCost(pred, y_target)
 
 
 class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, DCQP):
@@ -101,9 +108,10 @@ class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, 
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         super().__init__(model=model, **kwds)
-    
+
     def rebuild_model(self, model):
         """Rebuild a :class:`sklearn.naive_bayes.GaussianNB` model.
 
@@ -112,7 +120,7 @@ class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, 
         Parameters
         ----------
         model : instance of :class:`sklearn.naive_bayes.GaussianNB`
-            The `sklearn` gaussian naive bayes model. 
+            The `sklearn` gaussian naive bayes model.
 
         Returns
         -------
@@ -128,9 +136,27 @@ class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, 
         i = y
         j = 0 if y == 1 else 1
 
-        A = np.diag(-1. / (2. * self.mymodel.variances[j, :])) + np.diag(1. / (2. * self.mymodel.variances[i, :]))
-        b = (self.mymodel.means[j, :] / self.mymodel.variances[j, :]) - (self.mymodel.means[i, :] / self.mymodel.variances[i, :])
-        c = np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i]) + np.sum([np.log(1. / np.sqrt(2.*np.pi*self.mymodel.variances[j,k])) - ((self.mymodel.means[j,k]**2) / (2.*self.mymodel.variances[j,k])) for k in range(self.mymodel.dim)]) - np.sum([np.log(1. / np.sqrt(2.*np.pi*self.mymodel.variances[i,k])) - ((self.mymodel.means[i,k]**2) / (2.*self.mymodel.variances[i,k])) for k in range(self.mymodel.dim)])
+        A = np.diag(-1.0 / (2.0 * self.mymodel.variances[j, :])) + np.diag(1.0 / (2.0 * self.mymodel.variances[i, :]))
+        b = (self.mymodel.means[j, :] / self.mymodel.variances[j, :]) - (
+            self.mymodel.means[i, :] / self.mymodel.variances[i, :]
+        )
+        c = (
+            np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i])
+            + np.sum(
+                [
+                    np.log(1.0 / np.sqrt(2.0 * np.pi * self.mymodel.variances[j, k]))
+                    - ((self.mymodel.means[j, k] ** 2) / (2.0 * self.mymodel.variances[j, k]))
+                    for k in range(self.mymodel.dim)
+                ]
+            )
+            - np.sum(
+                [
+                    np.log(1.0 / np.sqrt(2.0 * np.pi * self.mymodel.variances[i, k]))
+                    - ((self.mymodel.means[i, k] ** 2) / (2.0 * self.mymodel.variances[i, k]))
+                    for k in range(self.mymodel.dim)
+                ]
+            )
+        )
 
         if self.is_affine_preprocessing_set():  # If necessary, apply affine preprocessing
             c = c + self.b.T @ b + self.b.T @ A @ self.b
@@ -142,25 +168,59 @@ class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, 
     def _build_solve_dcqp(self, x_orig, y_target, regularization, features_whitelist, optimizer_args):
         x_orig_prime = self._apply_affine_preprocessing_to_const(x_orig)
 
-        Q0 = np.eye(self.mymodel.dim)   # TODO: Can be ignored if regularization != l2
+        Q0 = np.eye(self.mymodel.dim)  # TODO: Can be ignored if regularization != l2
         Q1 = np.zeros((self.mymodel.dim, self.mymodel.dim))
-        q = -2. * x_orig_prime
+        q = -2.0 * x_orig_prime
         c = 0.0
 
         A0_i = []
         A1_i = []
         b_i = []
         r_i = []
-        
+
         i = y_target
         for j in filter(lambda z: z != y_target, range(len(self.mymodel.means))):
-            A0_i.append(np.diag(1. / (2. * self.mymodel.variances[i, :])))
-            A1_i.append(np.diag(1. / (2. * self.mymodel.variances[j, :])))
-            b_i.append((self.mymodel.means[j, :] / self.mymodel.variances[j, :]) - (self.mymodel.means[i, :] / self.mymodel.variances[i, :]))
-            r_i.append(np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i]) + np.sum([np.log(1. / np.sqrt(2.*np.pi*self.mymodel.variances[j,k])) - ((self.mymodel.means[j,k]**2) / (2.*self.mymodel.variances[j,k])) for k in range(self.mymodel.dim)]) - np.sum([np.log(1. / np.sqrt(2.*np.pi*self.mymodel.variances[i,k])) - ((self.mymodel.means[i,k]**2) / (2.*self.mymodel.variances[i,k])) for k in range(self.mymodel.dim)]))
+            A0_i.append(np.diag(1.0 / (2.0 * self.mymodel.variances[i, :])))
+            A1_i.append(np.diag(1.0 / (2.0 * self.mymodel.variances[j, :])))
+            b_i.append(
+                (self.mymodel.means[j, :] / self.mymodel.variances[j, :])
+                - (self.mymodel.means[i, :] / self.mymodel.variances[i, :])
+            )
+            r_i.append(
+                np.log(self.mymodel.class_priors[j] / self.mymodel.class_priors[i])
+                + np.sum(
+                    [
+                        np.log(1.0 / np.sqrt(2.0 * np.pi * self.mymodel.variances[j, k]))
+                        - ((self.mymodel.means[j, k] ** 2) / (2.0 * self.mymodel.variances[j, k]))
+                        for k in range(self.mymodel.dim)
+                    ]
+                )
+                - np.sum(
+                    [
+                        np.log(1.0 / np.sqrt(2.0 * np.pi * self.mymodel.variances[i, k]))
+                        - ((self.mymodel.means[i, k] ** 2) / (2.0 * self.mymodel.variances[i, k]))
+                        for k in range(self.mymodel.dim)
+                    ]
+                )
+            )
 
-        self.build_program(self.model, x_orig, y_target, Q0, Q1, q, c, A0_i, A1_i, b_i, r_i, features_whitelist=features_whitelist, mad=None if regularization != "l1" else np.ones(x_orig.shape[0]), optimizer_args=optimizer_args)
-        
+        self.build_program(
+            self.model,
+            x_orig,
+            y_target,
+            Q0,
+            Q1,
+            q,
+            c,
+            A0_i,
+            A1_i,
+            b_i,
+            r_i,
+            features_whitelist=features_whitelist,
+            mad=None if regularization != "l1" else np.ones(x_orig.shape[0]),
+            optimizer_args=optimizer_args,
+        )
+
         return DCQP.solve(self, x0=self.mymodel.means[i, :])
 
     def solve(self, x_orig, y_target, regularization, features_whitelist, return_as_dict, optimizer_args):
@@ -172,15 +232,27 @@ class GaussianNbCounterfactual(SklearnCounterfactual, MathematicalProgram, SDP, 
         delta = x_orig - xcf
 
         if self._model_predict([xcf]) != y_target:
-            raise Exception("No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again")
+            raise Exception(
+                "No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again"
+            )
 
         if return_as_dict is True:
             return self._SklearnCounterfactual__build_result_dict(xcf, y_target, delta)
-        else:
-            return xcf, y_target, delta
+        return xcf, y_target, delta
 
 
-def gaussiannb_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="auto", optimizer_args=None, return_as_dict=True, done=None):
+def gaussiannb_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="auto",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -193,14 +265,14 @@ def gaussiannb_generate_counterfactual(model, x, y_target, features_whitelist=No
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -246,7 +318,7 @@ def gaussiannb_generate_counterfactual(model, x, y_target, features_whitelist=No
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -260,4 +332,6 @@ def gaussiannb_generate_counterfactual(model, x, y_target, features_whitelist=No
         else:
             optimizer = "nelder-mead"
 
-    return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
+    return cf.compute_counterfactual(
+        x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+    )

@@ -2,5 +2,5 @@
 import torch
 
 
-def create_tensor(x, device=torch.device('cpu')):
+def create_tensor(x, device=torch.device("cpu")):
     return torch.Tensor(x, device=device)

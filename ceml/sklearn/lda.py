@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-import jax.numpy as npx
 import numpy as np
-import cvxpy as cp
+import numpy as npx
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from ..backend.jax.layer import log_multivariate_normal, create_tensor
-from ..backend.jax.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.layer import create_tensor, log_multivariate_normal
 from ..model import ModelWithLoss
+from ..optim import ConvexQuadraticProgram, MathematicalProgram, PlausibleCounterfactualOfHyperplaneClassifier
 from .counterfactual import SklearnCounterfactual
-from ..optim import MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier
 
 
 class Lda(ModelWithLoss):
@@ -37,18 +36,21 @@ class Lda(ModelWithLoss):
     TypeError
         If `model` is not an instance of :class:`sklearn.discriminant_analysis.LinearDiscriminantAnalysis`
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, LinearDiscriminantAnalysis):
-            raise TypeError(f"model has to be an instance of 'sklearn.discriminant_analysis.LinearDiscriminantAnalysis' but not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.discriminant_analysis.LinearDiscriminantAnalysis' but not of {type(model)}"
+            )
 
         self.class_priors = model.priors_
         self.means = model.means_
         self.sigma_inv = np.linalg.inv(model.covariance_)
 
         self.dim = self.means.shape[1]
-        
+
         super().__init__(**kwds)
-    
+
     def predict(self, x):
         """Predict the output of a given input.
 
@@ -58,13 +60,18 @@ class Lda(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` that is going to be classified.
-        
+
         Returns
         -------
         `jax.numpy.array`
             An array containing the class probabilities.
         """
-        log_proba = create_tensor([npx.log(self.class_priors[i]) + log_multivariate_normal(x, self.means[i], self.sigma_inv, self.dim) for i in range(len(self.class_priors))])
+        log_proba = create_tensor(
+            [
+                npx.log(self.class_priors[i]) + log_multivariate_normal(x, self.means[i], self.sigma_inv, self.dim)
+                for i in range(len(self.class_priors))
+            ]
+        )
         proba = npx.exp(log_proba)
 
         return proba / npx.sum(proba)
@@ -84,7 +91,7 @@ class Lda(ModelWithLoss):
             If `pred` is None, the class method `predict` is used for mapping the input to the output (class probabilities)
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.NegLogLikelihoodCost`
@@ -92,23 +99,29 @@ class Lda(ModelWithLoss):
         """
         if pred is None:
             return NegLogLikelihoodCost(self.predict, y_target)
-        else:
-            return NegLogLikelihoodCost(pred, y_target)
+        return NegLogLikelihoodCost(pred, y_target)
 
 
-class LdaCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier):
+class LdaCounterfactual(
+    SklearnCounterfactual, MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier
+):
     """Class for computing a counterfactual of a lda model.
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, LinearDiscriminantAnalysis):
-            raise TypeError(f"model has to be an instance of 'sklearn.discriminant_analysis.LinearDiscriminantAnalysis' but not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.discriminant_analysis.LinearDiscriminantAnalysis' but not of {type(model)}"
+            )
         if not hasattr(model, "covariance_"):
-            raise AttributeError("You have to set store_covariance=True when instantiating a new sklearn.discriminant_analysis.LinearDiscriminantAnalysis model")
+            raise AttributeError(
+                "You have to set store_covariance=True when instantiating a new sklearn.discriminant_analysis.LinearDiscriminantAnalysis model"
+            )
 
         super().__init__(model=model, w=None, b=None, n_dims=model.means_.shape[1], **kwds)
-    
+
     def rebuild_model(self, model):
         """Rebuild a :class:`sklearn.discriminant_analysis.LinearDiscriminantAnalysis` model.
 
@@ -117,7 +130,7 @@ class LdaCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadra
         Parameters
         ----------
         model : instance of :class:`sklearn.discriminant_analysis.LinearDiscriminantAnalysis`
-            The `sklearn` lda model - note that `store_covariance` must be set to True. 
+            The `sklearn` lda model - note that `store_covariance` must be set to True.
 
         Returns
         -------
@@ -125,7 +138,7 @@ class LdaCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadra
             The wrapped qda model.
         """
         return Lda(model)
-    
+
     def _build_constraints(self, var_x, y):
         constraints = []
 
@@ -135,14 +148,18 @@ class LdaCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadra
         # Build constraints
         i = y
         q_i = np.dot(self.mymodel.sigma_inv, self.mymodel.means[i].T)
-        b_i = np.log(self.mymodel.class_priors[i]) - .5 * np.dot( self.mymodel.means[i], np.dot(self.mymodel.sigma_inv, self.mymodel.means[i].T))
+        b_i = np.log(self.mymodel.class_priors[i]) - 0.5 * np.dot(
+            self.mymodel.means[i], np.dot(self.mymodel.sigma_inv, self.mymodel.means[i].T)
+        )
 
-        for j in range(len(self.mymodel.means)):    # One vs. One
+        for j in range(len(self.mymodel.means)):  # One vs. One
             if i == j:
                 continue
-            
+
             q_j = np.dot(self.mymodel.sigma_inv, self.mymodel.means[j])
-            b_j = np.log(self.mymodel.class_priors[j]) - .5 * np.dot(self.mymodel.means[j], np.dot(self.mymodel.sigma_inv, self.mymodel.means[j]))
+            b_j = np.log(self.mymodel.class_priors[j]) - 0.5 * np.dot(
+                self.mymodel.means[j], np.dot(self.mymodel.sigma_inv, self.mymodel.means[j])
+            )
 
             constraints.append(q_i.T @ var_x_ + b_i >= q_j.T @ var_x_ + b_j + self.epsilon)
 
@@ -157,15 +174,28 @@ class LdaCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadra
         delta = x_orig - xcf
 
         if self._model_predict([self._apply_affine_preprocessing_to_const(xcf)]) != y_target:
-            raise Exception("No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again")
+            raise Exception(
+                "No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again"
+            )
 
         if return_as_dict is True:
             return self._SklearnCounterfactual__build_result_dict(xcf, y_target, delta)
-        else:
-            return xcf, y_target, delta
+        return xcf, y_target, delta
 
 
-def lda_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="mp", optimizer_args=None, return_as_dict=True, done=None, plausibility=None):
+def lda_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="mp",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+    plausibility=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -178,14 +208,14 @@ def lda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -233,7 +263,7 @@ def lda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -245,6 +275,7 @@ def lda_generate_counterfactual(model, x, y_target, features_whitelist=None, reg
         optimizer = "mp"
 
     if plausibility is None:
-        return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
-    else:
-        raise NotImplementedError()
+        return cf.compute_counterfactual(
+            x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+        )
+    raise NotImplementedError()

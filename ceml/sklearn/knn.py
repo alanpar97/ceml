@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 import sklearn.neighbors
 
-from ..backend.jax.layer import create_tensor
-from ..backend.jax.costfunctions import TopKMinOfListDistCost, RegularizedCost
+from ..backend.numpy.costfunctions import TopKMinOfListDistCost
+from ..backend.numpy.layer import create_tensor
 from ..model import ModelWithLoss
-from .utils import desc_to_dist
-from .utils import build_regularization_loss
 from .counterfactual import SklearnCounterfactual
+from .utils import desc_to_dist
 
 
 class KNN(ModelWithLoss):
@@ -46,9 +45,14 @@ class KNN(ModelWithLoss):
     TypeError
         If `model` is not an instance of :class:`sklearn.neighbors.KNeighborsClassifier` or :class:`sklearn.neighbors.KNeighborsRegressor`
     """
+
     def __init__(self, model, dist="l2", **kwds):
-        if not isinstance(model, sklearn.neighbors.KNeighborsClassifier) and not isinstance(model, sklearn.neighbors.KNeighborsRegressor):
-            raise TypeError(f"model has to be an instance of 'sklearn.neighbors.KNeighborsClassifier' or 'sklearn.neighbors.KNeighborsRegressor' but not of {type(model)}")
+        if not isinstance(model, sklearn.neighbors.KNeighborsClassifier) and not isinstance(
+            model, sklearn.neighbors.KNeighborsRegressor
+        ):
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.neighbors.KNeighborsClassifier' or 'sklearn.neighbors.KNeighborsRegressor' but not of {type(model)}"
+            )
 
         self.X = model._fit_X
         self.y = model._y
@@ -56,7 +60,7 @@ class KNN(ModelWithLoss):
         self.dist = dist
 
         super().__init__(**kwds)
-    
+
     def predict(self, x):
         """
         Note
@@ -65,8 +69,8 @@ class KNN(ModelWithLoss):
 
         This function does not predict anything and just returns the given input.
         """
-        return x    # Note: Identity function is necessary because our knn loss function works on the input (not on the final classification) 
-    
+        return x  # Note: Identity function is necessary because our knn loss function works on the input (not on the final classification)
+
     def get_loss(self, y_target, pred=None):
         """Creates and returns a loss function.
 
@@ -82,7 +86,7 @@ class KNN(ModelWithLoss):
             If `pred` is None, no transformation is applied to the input before passing it into the loss function.
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.TopKMinOfListDistCost`
@@ -93,11 +97,11 @@ class KNN(ModelWithLoss):
             target_samples = create_tensor(self.X[[y_target(y) for y in self.y], :])
         else:
             target_samples = create_tensor(self.X[self.y == y_target, :])
-        
+
         # Build a loss function that penalize the distance to the nearest prototype
         if not callable(self.dist):
             self.dist = desc_to_dist(self.dist)
-        
+
         return TopKMinOfListDistCost(self.dist, target_samples, self.n_neighbors, pred)
 
 
@@ -106,8 +110,9 @@ class KnnCounterfactual(SklearnCounterfactual):
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, dist="l2", **kwds):
-        self.dist = dist    # TODO: Extract distance from model
+        self.dist = dist  # TODO: Extract distance from model
 
         super().__init__(model=model, **kwds)
 
@@ -119,20 +124,36 @@ class KnnCounterfactual(SklearnCounterfactual):
         Parameters
         ----------
         model : instace of :class:`sklearn.neighbors.KNeighborsClassifier` or :class:`sklearn.neighbors.KNeighborsRegressor`
-            The `sklearn` knn model. 
+            The `sklearn` knn model.
 
         Returns
         -------
         :class:`ceml.sklearn.knn.KNN`
             The wrapped knn model.
         """
-        if not isinstance(model, sklearn.neighbors.KNeighborsClassifier) and not isinstance(model, sklearn.neighbors.KNeighborsRegressor):
-            raise TypeError(f"model has to be an instance of 'sklearn.neighbors.KNeighborsClassifier' or 'sklearn.neighbors.KNeighborsRegressor' but not of {type(model)}")
-    
+        if not isinstance(model, sklearn.neighbors.KNeighborsClassifier) and not isinstance(
+            model, sklearn.neighbors.KNeighborsRegressor
+        ):
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.neighbors.KNeighborsClassifier' or 'sklearn.neighbors.KNeighborsRegressor' but not of {type(model)}"
+            )
+
         return KNN(model, self.dist)
 
 
-def knn_generate_counterfactual(model, x, y_target, features_whitelist=None, dist="l2", regularization="l1", C=1.0, optimizer="nelder-mead", optimizer_args=None, return_as_dict=True, done=None):
+def knn_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    dist="l2",
+    regularization="l1",
+    C=1.0,
+    optimizer="nelder-mead",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -145,13 +166,13 @@ def knn_generate_counterfactual(model, x, y_target, features_whitelist=None, dis
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     dist : `str` or callable, optional
         Computes the distance between a prototype and a data point.
-        
+
         Supported values:
 
             - l1: Penalizes the absolute deviation.
@@ -165,10 +186,10 @@ def knn_generate_counterfactual(model, x, y_target, features_whitelist=None, dis
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
-        
+
         `regularization` can be a description of the regularization, an instance of :class:`ceml.costfunctions.costfunctions.CostFunction` (or :class:`ceml.costfunctions.costfunctions.CostFunctionDifferentiable` if your cost function is differentiable) or None if no regularization is requested.
 
         If `regularization` is None, no regularization is used.
@@ -219,4 +240,6 @@ def knn_generate_counterfactual(model, x, y_target, features_whitelist=None, dis
     if optimizer == "auto":
         optimizer = "nelder-mead"
 
-    return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
+    return cf.compute_counterfactual(
+        x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+    )

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
+
 import sklearn.ensemble
 
-from .decisiontree import DecisionTreeCounterfactual
-from ..model import ModelWithLoss
 from ..costfunctions import CostFunction, RegularizedCost
-from .utils import build_regularization_loss
-from ..optim import InputWrapper
+from ..model import ModelWithLoss
 from .counterfactual import SklearnCounterfactual
+from .decisiontree import DecisionTreeCounterfactual
+from .utils import build_regularization_loss
 
 
 class EnsembleVotingCost(CostFunction):
@@ -23,21 +23,24 @@ class EnsembleVotingCost(CostFunction):
         The requested prediction.
     input_wrapper : `callable`, optional
         Converts the input (e.g. if we want to exclude some features/dimensions, we might have to include these missing features before applying any function to it).
-        
+
         The default is None.
     """
+
     def __init__(self, models, y_target, input_wrapper=None, epsilon=0, **kwds):
         self.models = models
         self.num_models = len(models)
         self.y_target = y_target if callable(y_target) else lambda y: y == y_target
-        
+
         super().__init__(input_to_output=input_wrapper, **kwds)
-    
+
     def score_impl(self, x):
         """
         Implementation of the loss function.
         """
-        return (-1. * sum([1 if self.y_target(model.predict([x])[0]) else 0 for model in self.models])) / self.num_models
+        return (
+            -1.0 * sum([1 if self.y_target(model.predict([x])[0]) else 0 for model in self.models])
+        ) / self.num_models
 
 
 class RandomForest(ModelWithLoss):
@@ -47,15 +50,20 @@ class RandomForest(ModelWithLoss):
     ----------
     model : instance of :class:`sklearn.ensemble.RandomForestClassifier` or :class:`sklearn.ensemble.RandomForestRegressor`
         The random forest model.
-        
+
     Raises
     ------
     TypeError
         If `model` is not an instance of :class:`sklearn.ensemble.RandomForestClassifier` or :class:`sklearn.ensemble.RandomForestRegressor`
     """
+
     def __init__(self, model, **kwds):
-        if not isinstance(model, sklearn.ensemble.RandomForestClassifier) and not isinstance(model, sklearn.ensemble.RandomForestRegressor):
-            raise TypeError(f"model has to be an instance of 'sklearn.ensemble.RandomForestClassifier' or 'sklearn.ensemble.RandomForestRegressor' not of {type(model)}")
+        if not isinstance(model, sklearn.ensemble.RandomForestClassifier) and not isinstance(
+            model, sklearn.ensemble.RandomForestRegressor
+        ):
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.ensemble.RandomForestClassifier' or 'sklearn.ensemble.RandomForestRegressor' not of {type(model)}"
+            )
 
         self.model = model
 
@@ -70,14 +78,14 @@ class RandomForest(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` that is going to be classified.
-        
+
         Returns
         -------
         `int` or `float`
             Prediction.
         """
         return self.model.predict([x])[0]
-    
+
     def get_loss(self, y_target, input_wrapper=None):
         """Creates and returns a loss function.
 
@@ -87,7 +95,7 @@ class RandomForest(ModelWithLoss):
             The requested prediction.
         input_wrapper : `callable`
             Converts the input (e.g. if we want to exclude some features/dimensions, we might have to include these missing features before applying any function to it).
-        
+
         Returns
         -------
         :class:`ceml.sklearn.randomforest.EnsembleVotingCost`
@@ -101,9 +109,10 @@ class RandomForestCounterfactual(SklearnCounterfactual):
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         super().__init__(model=model, **kwds)
-    
+
     def build_loss(self, regularization, x_orig, y_target, pred, grad_mask, C, input_wrapper):
         """
         Build the (non-differentiable) cost function: Regularization + Loss
@@ -122,33 +131,50 @@ class RandomForestCounterfactual(SklearnCounterfactual):
         Parameters
         ----------
         model : instance of :class:`sklearn.ensemble.RandomForestClassifier` or :class:`sklearn.ensemble.RandomForestRegressor`
-            The `sklearn` random forest model. 
+            The `sklearn` random forest model.
 
         Returns
         -------
         :class:`ceml.sklearn.randomforest.RandomForest`
             The wrapped random forest model.
         """
-        if not isinstance(model, sklearn.ensemble.RandomForestClassifier) and not isinstance(model, sklearn.ensemble.RandomForestRegressor):
-            raise TypeError(f"model has to be an instance of 'sklearn.ensemble.RandomForestClassifier', 'sklearn.ensemble.RandomForestRegressor' not of {type(model)}")
+        if not isinstance(model, sklearn.ensemble.RandomForestClassifier) and not isinstance(
+            model, sklearn.ensemble.RandomForestRegressor
+        ):
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.ensemble.RandomForestClassifier', 'sklearn.ensemble.RandomForestRegressor' not of {type(model)}"
+            )
 
         return RandomForest(model)
-    
+
     def __compute_initial_values(self, x, y_target, features_whitelist):
         """
         Compute initial value for the optimizer.
         """
         result = [x]
-        
+
         for m in self.model.estimators_:
             try:
-                result += DecisionTreeCounterfactual(m).compute_all_counterfactuals(x, y_target, features_whitelist=features_whitelist)
+                result += DecisionTreeCounterfactual(m).compute_all_counterfactuals(
+                    x, y_target, features_whitelist=features_whitelist
+                )
             except Exception as ex:
                 logging.debug(str(ex))
-        
+
         return result
 
-    def compute_counterfactual(self, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="nelder-mead", optimizer_args=None, return_as_dict=True, done=None):
+    def compute_counterfactual(
+        self,
+        x,
+        y_target,
+        features_whitelist=None,
+        regularization="l1",
+        C=1.0,
+        optimizer="nelder-mead",
+        optimizer_args=None,
+        return_as_dict=True,
+        done=None,
+    ):
         """Computes a counterfactual of a given input `x`.
 
         Parameters
@@ -159,14 +185,14 @@ class RandomForestCounterfactual(SklearnCounterfactual):
             The requested prediction of the counterfactual.
         feature_whitelist : `list(int)`, optional
             List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-            
+
             If `feature_whitelist` is None, all features can be used.
 
             The default is None.
         regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
             Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
             Supported values:
-            
+
                 - l1: Penalizes the absolute deviation.
                 - l2: Penalizes the squared deviation.
 
@@ -218,7 +244,7 @@ class RandomForestCounterfactual(SklearnCounterfactual):
             A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
             (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-        
+
         Raises
         ------
         Exception
@@ -243,18 +269,32 @@ class RandomForestCounterfactual(SklearnCounterfactual):
                 loss, loss_grad = self.build_loss(regularization, x_orig, y_target, pred, grad_mask, c, input_wrapper)
 
                 # Compute counterfactual
-                x_cf, y_cf, delta = self.compute_counterfactual_ex(x, loss, x_orig, loss_grad, optimizer, optimizer_args, input_wrapper, False)
+                x_cf, y_cf, delta = self.compute_counterfactual_ex(
+                    x, loss, x_orig, loss_grad, optimizer, optimizer_args, input_wrapper, False
+                )
 
                 if done(y_cf) == True:
                     if return_as_dict is True:
                         return self._SklearnCounterfactual__build_result_dict(x_cf, y_cf, delta)
-                    else:
-                        return x_cf, y_cf, delta
-        
-        raise Exception("No counterfactual found - Consider changing parameters 'C', 'regularization', 'features_whitelist', 'optimizer' and try again")
+                    return x_cf, y_cf, delta
+
+        raise Exception(
+            "No counterfactual found - Consider changing parameters 'C', 'regularization', 'features_whitelist', 'optimizer' and try again"
+        )
 
 
-def randomforest_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="nelder-mead", optimizer_args=None, return_as_dict=True, done=None):
+def randomforest_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="nelder-mead",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -267,15 +307,15 @@ def randomforest_generate_counterfactual(model, x, y_target, features_whitelist=
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
-        
+
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -319,7 +359,7 @@ def randomforest_generate_counterfactual(model, x, y_target, features_whitelist=
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -330,4 +370,6 @@ def randomforest_generate_counterfactual(model, x, y_target, features_whitelist=
     if optimizer == "auto":
         optimizer = "nelder-mead"
 
-    return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict)
+    return cf.compute_counterfactual(
+        x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict
+    )

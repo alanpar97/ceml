@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import sklearn.linear_model
 import numpy as np
+import sklearn.linear_model
 
-from ..backend.jax.layer import create_tensor, affine, softmax, softmax_binary
-from ..backend.jax.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.costfunctions import NegLogLikelihoodCost
+from ..backend.numpy.layer import affine, softmax, softmax_binary
 from ..model import ModelWithLoss
+from ..optim import ConvexQuadraticProgram, MathematicalProgram, PlausibleCounterfactualOfHyperplaneClassifier
 from .counterfactual import SklearnCounterfactual
-from ..optim import MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier
 
 
 class SoftmaxRegression(ModelWithLoss):
@@ -24,7 +24,7 @@ class SoftmaxRegression(ModelWithLoss):
     w : `numpy.ndarray`
         The weight vector (a matrix if we have more than two classes).
     b : `numpy.ndarray`
-        The intercept/bias (a vector if we have more than two classes). 
+        The intercept/bias (a vector if we have more than two classes).
     dim : `int`
         Dimensionality of the input data.
     is_multiclass : `boolean`
@@ -35,9 +35,12 @@ class SoftmaxRegression(ModelWithLoss):
     TypeError
         If `model` is not an instance of :class:`sklearn.linear_model.LogisticRegression`
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, sklearn.linear_model.LogisticRegression):
-            raise TypeError(f"model has to be an instance of 'sklearn.linear_model.LogisticRegression' not of {type(model)}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.linear_model.LogisticRegression' not of {type(model)}"
+            )
 
         self.w = model.coef_
         self.b = model.intercept_
@@ -56,7 +59,7 @@ class SoftmaxRegression(ModelWithLoss):
         ----------
         x : `numpy.ndarray`
             The input `x` that is going to be classified.
-        
+
         Returns
         -------
         `jax.numpy.array`
@@ -64,9 +67,8 @@ class SoftmaxRegression(ModelWithLoss):
         """
         if self.is_multiclass is True:
             return softmax(affine(x, self.w, self.b))
-        else:
-            return softmax_binary(affine(x, self.w, self.b))
-    
+        return softmax_binary(affine(x, self.w, self.b))
+
     def get_loss(self, y_target, pred=None):
         """Creates and returns a loss function.
 
@@ -82,7 +84,7 @@ class SoftmaxRegression(ModelWithLoss):
             If `pred` is None, the class method `predict` is used for mapping the input to the output (class probabilities)
 
             The default is None.
-        
+
         Returns
         -------
         :class:`ceml.backend.jax.costfunctions.NegLogLikelihoodCost`
@@ -90,23 +92,25 @@ class SoftmaxRegression(ModelWithLoss):
         """
         if pred is None:
             return NegLogLikelihoodCost(self.predict, y_target)
-        else:
-            return NegLogLikelihoodCost(pred, y_target)
+        return NegLogLikelihoodCost(pred, y_target)
 
 
-class SoftmaxCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier):
+class SoftmaxCounterfactual(
+    SklearnCounterfactual, MathematicalProgram, ConvexQuadraticProgram, PlausibleCounterfactualOfHyperplaneClassifier
+):
     """Class for computing a counterfactual of a softmax regression model.
 
     See parent class :class:`ceml.sklearn.counterfactual.SklearnCounterfactual`.
     """
+
     def __init__(self, model, **kwds):
         if not isinstance(model, sklearn.linear_model.LogisticRegression):
-            raise TypeError(f"model has to be an instance of 'sklearn.linear_model.LogisticRegression' not of {type(model)}")
-        if model.multi_class != "multinomial":
-            raise ValueError(f"multi_class has to be 'multinomial' not {model.multi_class}")
+            raise TypeError(
+                f"model has to be an instance of 'sklearn.linear_model.LogisticRegression' not of {type(model)}"
+            )
 
         super().__init__(model=model, w=model.coef_, b=model.intercept_, n_dims=model.coef_.shape[1], **kwds)
-    
+
     def rebuild_model(self, model):
         """Rebuilds a :class:`sklearn.linear_model.LogisticRegression` model.
 
@@ -115,7 +119,7 @@ class SoftmaxCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQu
         Parameters
         ----------
         model : instance of :class:`sklearn.linear_model.LogisticRegression`
-            The `sklearn` softmax regression model. 
+            The `sklearn` softmax regression model.
 
         Returns
         -------
@@ -123,28 +127,28 @@ class SoftmaxCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQu
             The wrapped softmax regression model.
         """
         return SoftmaxRegression(model)
-    
+
     def _build_constraints(self, var_x, y):
         constraints = []
-        
+
         # If set, a apply an affine preprocessing to x
         var_x_ = self._apply_affine_preprocessing_to_var(var_x)
 
         # Build constraints
         if self.mymodel.is_multiclass is True:  # Multiclass classifier
             i = y
-            w_i = self.mymodel.w[i,:]
+            w_i = self.mymodel.w[i, :]
             b_i = self.mymodel.b[i]
 
             for j in range(len(self.mymodel.w)):
                 if i == j:
                     continue
 
-                w_j = self.mymodel.w[j,:]
+                w_j = self.mymodel.w[j, :]
                 b_j = self.mymodel.b[j]
-                
+
                 constraints.append(w_i.T @ var_x_ + b_i >= w_j.T @ var_x_ + b_j + self.epsilon)
-        else:   # Binary classifier
+        else:  # Binary classifier
             y_ = -1 if y == 0 else 1
             constraints.append(y_ * (var_x_.T @ self.mymodel.w.flatten() + self.mymodel.b.flatten()) >= self.epsilon)
 
@@ -159,15 +163,28 @@ class SoftmaxCounterfactual(SklearnCounterfactual, MathematicalProgram, ConvexQu
         delta = x_orig - xcf
 
         if self._model_predict([xcf]) != y_target:
-            raise Exception("No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again")
+            raise Exception(
+                "No counterfactual found - Consider changing parameters 'regularization', 'features_whitelist', 'optimizer' and try again"
+            )
 
         if return_as_dict is True:
             return self._SklearnCounterfactual__build_result_dict(xcf, y_target, delta)
-        else:
-            return xcf, y_target, delta
+        return xcf, y_target, delta
 
 
-def softmaxregression_generate_counterfactual(model, x, y_target, features_whitelist=None, regularization="l1", C=1.0, optimizer="mp", optimizer_args=None, return_as_dict=True, done=None, plausibility=None):
+def softmaxregression_generate_counterfactual(
+    model,
+    x,
+    y_target,
+    features_whitelist=None,
+    regularization="l1",
+    C=1.0,
+    optimizer="mp",
+    optimizer_args=None,
+    return_as_dict=True,
+    done=None,
+    plausibility=None,
+):
     """Computes a counterfactual of a given input `x`.
 
     Parameters
@@ -182,15 +199,15 @@ def softmaxregression_generate_counterfactual(model, x, y_target, features_white
         The requested prediction of the counterfactual.
     features_whitelist : `list(int)`, optional
         List of feature indices (dimensions of the input space) that can be used when computing the counterfactual.
-        
+
         If `features_whitelist` is None, all features can be used.
 
         The default is None.
     regularization : `str` or :class:`ceml.costfunctions.costfunctions.CostFunction`, optional
         Regularizer of the counterfactual. Penalty for deviating from the original input `x`.
-        
+
         Supported values:
-        
+
             - l1: Penalizes the absolute deviation.
             - l2: Penalizes the squared deviation.
 
@@ -238,7 +255,7 @@ def softmaxregression_generate_counterfactual(model, x, y_target, features_white
         A dictionary where the counterfactual is stored in 'x_cf', its prediction in 'y_cf' and the changes to the original input in 'delta'.
 
         (x_cf, y_cf, delta) : triple if `return_as_dict` is False
-    
+
     Raises
     ------
     Exception
@@ -250,8 +267,18 @@ def softmaxregression_generate_counterfactual(model, x, y_target, features_white
         optimizer = "mp"
 
     if plausibility is None:
-        return cf.compute_counterfactual(x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done)
-    else:
-        cf.setup_plausibility_params(plausibility["ellipsoids_r"], plausibility["gmm_weights"], plausibility["gmm_means"], plausibility["gmm_covariances"], plausibility["projection_matrix"], plausibility["projection_mean_sub"], plausibility["use_density_constraints"], plausibility["density_thresholds"])
+        return cf.compute_counterfactual(
+            x, y_target, features_whitelist, regularization, C, optimizer, optimizer_args, return_as_dict, done
+        )
+    cf.setup_plausibility_params(
+        plausibility["ellipsoids_r"],
+        plausibility["gmm_weights"],
+        plausibility["gmm_means"],
+        plausibility["gmm_covariances"],
+        plausibility["projection_matrix"],
+        plausibility["projection_mean_sub"],
+        plausibility["use_density_constraints"],
+        plausibility["density_thresholds"],
+    )
 
-        return cf.compute_plausible_counterfactual(x, y_target)
+    return cf.compute_plausible_counterfactual(x, y_target)

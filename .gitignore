@@ -11,3 +11,4 @@ _templates/
 .coverage*
 htmlcov/
 outcmaes/
+*.idea

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-import torch
-import numpy as np
 import inspect
-from ..layer import create_tensor
+
+import numpy as np
+import torch
+
 from ....optim import Optimizer
 from ....optim import prepare_optim as desc_to_optim_scipy
+from ..layer import create_tensor
 
 
 class TorchOptimizer(Optimizer):
@@ -12,6 +14,7 @@ class TorchOptimizer(Optimizer):
 
     The :class:`TorchOptimizer` provides an interface for wrapping an arbitrary PyTorch optimization algorithm (see :class:`torch.optim`) and minimizing a given loss function.
     """
+
     def __init__(self, **kwds):
         self.model = None
         self.loss = None
@@ -27,8 +30,21 @@ class TorchOptimizer(Optimizer):
         self.grad_mask = None
 
         super().__init__(**kwds)
-    
-    def init(self, model, loss, x, optim, optim_args, lr_scheduler=None, lr_scheduler_args=None, tol=None, max_iter=1, grad_mask=None, device=torch.device("cpu")):
+
+    def init(
+        self,
+        model,
+        loss,
+        x,
+        optim,
+        optim_args,
+        lr_scheduler=None,
+        lr_scheduler_args=None,
+        tol=None,
+        max_iter=1,
+        grad_mask=None,
+        device=torch.device("cpu"),
+    ):
         """
         Initializes all parameters.
 
@@ -61,7 +77,7 @@ class TorchOptimizer(Optimizer):
 
             The default is 1.
         grad_mask : `numpy.array`, optional
-            Mask that is multiplied element wise on top of the gradient - can be used to hold some dimensions constant. 
+            Mask that is multiplied element wise on top of the gradient - can be used to hold some dimensions constant.
 
             If `grad_mask` is None, no gradient mask is used.
 
@@ -70,7 +86,7 @@ class TorchOptimizer(Optimizer):
             Specifies the hardware device (e.g. cpu or gpu) we are working on.
 
             The default is `torch.device("cpu")`.
-        
+
         Raises
         ------
         TypeError
@@ -80,7 +96,7 @@ class TorchOptimizer(Optimizer):
             raise TypeError(f"model must be an instance of torch.nn.Module not of {type(model)}")
         if not callable(loss):
             raise TypeError("loss has to be callable")
-        
+
         self.model = model
         self.loss = loss
         self.tol = 0.0 if tol is None else tol
@@ -120,19 +136,48 @@ class TorchOptimizer(Optimizer):
 
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
-        
+
         return self.x.detach().numpy()
 
     def __call__(self):
         return self.minimize()
 
 
-def prepare_optim(optimizer, optimizer_args, lr_scheduler, lr_scheduler_args, loss, loss_npy, loss_grad_npy, x_orig, model, tol, max_iter, grad_mask, device):
+def prepare_optim(
+    optimizer,
+    optimizer_args,
+    lr_scheduler,
+    lr_scheduler_args,
+    loss,
+    loss_npy,
+    loss_grad_npy,
+    x_orig,
+    model,
+    tol,
+    max_iter,
+    grad_mask,
+    device,
+):
     if isinstance(optimizer, str) or isinstance(optimizer, Optimizer):
-        return desc_to_optim_scipy(optimizer, loss_npy, x_orig, loss_grad_npy, optimizer_args={"max_iter": max_iter, "tol": tol})
-    elif inspect.isclass(optimizer) == True:
+        return desc_to_optim_scipy(
+            optimizer, loss_npy, x_orig, loss_grad_npy, optimizer_args={"max_iter": max_iter, "tol": tol}
+        )
+    if inspect.isclass(optimizer) == True:
         optim = TorchOptimizer()
-        optim.init(model, loss, x_orig, optimizer, optimizer_args, lr_scheduler, lr_scheduler_args, tol, max_iter, grad_mask, device)
+        optim.init(
+            model,
+            loss,
+            x_orig,
+            optimizer,
+            optimizer_args,
+            lr_scheduler,
+            lr_scheduler_args,
+            tol,
+            max_iter,
+            grad_mask,
+            device,
+        )
         return optim
-    else:
-        raise TypeError("Invalid type of argument 'optimizer'.\n'optimizer' has to be a string or the name of a class that is derived from torch.optim.Optimizer")
+    raise TypeError(
+        "Invalid type of argument 'optimizer'.\n'optimizer' has to be a string or the name of a class that is derived from torch.optim.Optimizer"
+    )

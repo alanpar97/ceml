@@ -7,13 +7,14 @@ class CostFunction(ABC):
 
     Note
     ----
-    The class :class:`CostFunction` can not be instantiated because it contains an abstract method. 
+    The class :class:`CostFunction` can not be instantiated because it contains an abstract method.
     """
+
     def __init__(self, input_to_output=None, **kwds):
         self.input_to_output = input_to_output if input_to_output is not None else lambda z: z
 
         super().__init__(**kwds)
-    
+
     def score(self, x):
         return self.score_impl(self.input_to_output(x))
 
@@ -28,7 +29,7 @@ class CostFunction(ABC):
         All derived classes must implement this method.
         """
         raise NotImplementedError()
-    
+
     def __call__(self, x):
         return self.score(x)
 
@@ -38,11 +39,12 @@ class CostFunctionDifferentiable(CostFunction):
 
     Note
     ----
-    The class :class:`CostFunctionDifferentiable` can not be instantiated because it contains an abstract method. 
+    The class :class:`CostFunctionDifferentiable` can not be instantiated because it contains an abstract method.
     """
+
     def __init__(self, input_to_output=None, **kwds):
         super().__init__(input_to_output=input_to_output, **kwds)
-    
+
     @abstractmethod
     def grad(self, mask=None):
         """Computes the gradient.
@@ -63,7 +65,7 @@ class CostFunctionDifferentiable(CostFunction):
 
 class RegularizedCost(CostFunction):
     """Regularized cost function.
-    
+
     The :class:`RegularizedCost` class implements a regularized cost function. The cost function is the sum of a regularization term (weighted by the regularization strength `C`) and a term that penalizes wrong predictions.
 
     Parameters
@@ -77,11 +79,16 @@ class RegularizedCost(CostFunction):
     C : `float`
         Regularization strength.
     """
+
     def __init__(self, penalize_input, penalize_output, C=1.0, **kwds):
         if not isinstance(penalize_input, CostFunction):
-            raise TypeError(f"penalize_input has to be an instance of 'CostFunction' but not of '{type(penalize_input)}'")
+            raise TypeError(
+                f"penalize_input has to be an instance of 'CostFunction' but not of '{type(penalize_input)}'"
+            )
         if not isinstance(penalize_output, CostFunction):
-            raise TypeError(f"penalize_output has to be an instance of 'CostFunction' but not of {type(penalize_output)}")
+            raise TypeError(
+                f"penalize_output has to be an instance of 'CostFunction' but not of {type(penalize_output)}"
+            )
 
         self.penalize_input = penalize_input
         self.penalize_output = penalize_output

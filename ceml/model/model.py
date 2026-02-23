@@ -7,14 +7,15 @@ class Model(ABC):
 
     Note
     ----
-    The class :class:`Model` can not be instantiated because it contains an abstract method. 
+    The class :class:`Model` can not be instantiated because it contains an abstract method.
     """
+
     def __init__(self, **kwds):
         super().__init__(**kwds)
-    
+
     def __call__(self, x):
         return self.predict(x)
-    
+
     @abstractmethod
     def predict(self, x):
         """Predict the output of a given input.
@@ -33,8 +34,9 @@ class ModelWithLoss(Model):
 
     Note
     ----
-    The class :class:`ModelWithLoss` can not be instantiated because it contains an abstract method. 
+    The class :class:`ModelWithLoss` can not be instantiated because it contains an abstract method.
     """
+
     def __init__(self, **kwds):
         super().__init__(**kwds)
 
@@ -54,4 +56,3 @@ class ModelWithLoss(Model):
         All derived classes must implement this method.
         """
         raise NotImplementedError()
-
