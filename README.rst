@@ -6,7 +6,9 @@ Counterfactuals for Explaining Machine Learning models
 --------------------------------------------------------
 
 CEML is a Python toolbox for computing counterfactuals. Counterfactuals can be used to explain the predictions of machine learing models.
+
 **Notes from this fork**
+
 This fork has done some refactoring to be compatible with Python 3.12. On the other hand it has removed some features to make this toolbox more lightweight.
 For example, the original JAX backend was replaced for numpy+scipy backend. Support for some frameworks (e.g. Pipeline from scikit-learn, Tensorflow, and sklearn-lvq) was removed.
 
